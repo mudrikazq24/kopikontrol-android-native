@@ -48,11 +48,11 @@ jobs:
         run: gradle assembleDebug
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk KopiKontrol-Native-v2.0.0-alpha02.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk KopiKontrol-Native-v2.0.0-alpha03.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: KopiKontrol-Native-v2.0.0-alpha02
-          path: KopiKontrol-Native-v2.0.0-alpha02.apk
+          name: KopiKontrol-Native-v2.0.0-alpha03
+          path: KopiKontrol-Native-v2.0.0-alpha03.apk
           retention-days: 30
