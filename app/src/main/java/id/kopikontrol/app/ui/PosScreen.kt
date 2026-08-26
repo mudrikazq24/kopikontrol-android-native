@@ -108,6 +108,7 @@ fun PosScreen(workspace: WorkspaceData) {
         else if (transaction != null) scope.launch {
             val printer = store.printerSettings()
             val result = printerManager.print(printer.deviceAddress, receiptText(transaction, workspace, store))
+            store.savePrinterConnection(printer.deviceAddress, result.isSuccess)
             Toast.makeText(context, result.exceptionOrNull()?.message ?: "Struk dikirim ke printer.", Toast.LENGTH_LONG).show()
         }
         pendingBluetoothPrint = null
@@ -136,6 +137,7 @@ fun PosScreen(workspace: WorkspaceData) {
         else if (printerManager.requiresPermission()) { pendingBluetoothPrint = transaction; printerPermission.launch(Manifest.permission.BLUETOOTH_CONNECT) }
         else scope.launch {
             val result = printerManager.print(printer.deviceAddress, receipt)
+            store.savePrinterConnection(printer.deviceAddress, result.isSuccess)
             Toast.makeText(context, result.exceptionOrNull()?.message ?: "Struk dikirim ke printer.", Toast.LENGTH_LONG).show()
         }
     }

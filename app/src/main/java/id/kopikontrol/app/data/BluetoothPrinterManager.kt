@@ -33,7 +33,6 @@ class BluetoothPrinterManager(private val context: Context) {
             require(address.isNotBlank()) { "Pilih printer Bluetooth terlebih dahulu." }
             val device = adapter?.getRemoteDevice(address) ?: error("Bluetooth tidak tersedia.")
             val socket = device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
-            adapter?.cancelDiscovery()
             socket.use {
                 it.connect()
                 it.outputStream.use { output ->

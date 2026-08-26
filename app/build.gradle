@@ -12,8 +12,8 @@ android {
         applicationId "id.kopikontrol.nativealpha"
         minSdk 24
         targetSdk 35
-        versionCode 8
-        versionName "2.0.0-alpha03"
+        versionCode 9
+        versionName "2.0.0-alpha04"
         buildConfigField "String", "API_BASE_URL", '"https://kopikontrol-starter.mudrikarzaqi47.chatgpt.site"'
     }
 

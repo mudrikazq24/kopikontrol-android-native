@@ -41,6 +41,13 @@ class PosStore(context: Context) {
         preferences.edit().putString("printer", JSONObject().put("type", value.type).put("paperWidth", value.paperWidth).put("deviceName", value.deviceName).put("deviceAddress", value.deviceAddress).toString()).apply()
     }
 
+    fun printerConnected(address: String): Boolean = address.isNotBlank() &&
+        preferences.getBoolean("printer_connected", false) && preferences.getString("printer_connected_address", "") == address
+
+    fun savePrinterConnection(address: String, connected: Boolean) {
+        preferences.edit().putString("printer_connected_address", address).putBoolean("printer_connected", connected).apply()
+    }
+
     fun transactions(): List<PosTransaction> {
         val array = runCatching { JSONArray(preferences.getString("transactions", "[]").orEmpty()) }.getOrDefault(JSONArray())
         return (0 until array.length()).map { array.getJSONObject(it) }.map { json ->

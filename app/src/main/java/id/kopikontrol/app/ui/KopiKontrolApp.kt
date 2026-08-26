@@ -33,7 +33,12 @@ import androidx.compose.material.icons.outlined.Coffee
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Logout
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Refresh
@@ -311,11 +316,12 @@ private fun ChoiceField(label: String, value: String, options: List<String>, onC
 private fun NativeWorkspace(account: Account, workspace: WorkspaceData, error: String, clearError: () -> Unit, reload: () -> Unit, logout: () -> Unit) {
     var destination by remember { mutableStateOf(Destination.Dashboard) }
     var confirmLogout by remember { mutableStateOf(false) }
+    var sidebarOpen by remember { mutableStateOf(true) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val tablet = maxWidth >= 700.dp
         if (tablet) Row(Modifier.fillMaxSize()) {
-            Sidebar(destination, { destination = it }, account, { confirmLogout = true })
-            WorkspaceContent(Modifier.weight(1f), destination, workspace, account, error, clearError, reload)
+            if (sidebarOpen) Sidebar(destination, { destination = it }, account, { confirmLogout = true })
+            WorkspaceContent(Modifier.weight(1f), destination, workspace, account, error, clearError, reload, onToggleSidebar = { sidebarOpen = !sidebarOpen }, openProfile = { destination = Destination.Profile })
         } else Scaffold(
             bottomBar = {
                 NavigationBar(containerColor = Forest) {
@@ -324,7 +330,7 @@ private fun NativeWorkspace(account: Account, workspace: WorkspaceData, error: S
                     }
                 }
             }
-        ) { padding -> WorkspaceContent(Modifier.padding(padding), destination, workspace, account, error, clearError, reload) }
+        ) { padding -> WorkspaceContent(Modifier.padding(padding), destination, workspace, account, error, clearError, reload, onToggleSidebar = null, openProfile = { destination = Destination.Profile }) }
     }
     if (confirmLogout) AlertDialog(onDismissRequest = { confirmLogout = false }, title = { Text("Keluar dari akun?") }, text = { Text("Kamu perlu masuk kembali untuk mengakses ruang kerja kedai.") }, confirmButton = { Button(onClick = logout) { Text("Keluar") } }, dismissButton = { OutlinedButton(onClick = { confirmLogout = false }) { Text("Batal") } })
 }
@@ -346,11 +352,12 @@ private fun Sidebar(selected: Destination, onSelect: (Destination) -> Unit, acco
 }
 
 @Composable
-private fun WorkspaceContent(modifier: Modifier, destination: Destination, workspace: WorkspaceData, account: Account, error: String, clearError: () -> Unit, reload: () -> Unit) {
+private fun WorkspaceContent(modifier: Modifier, destination: Destination, workspace: WorkspaceData, account: Account, error: String, clearError: () -> Unit, reload: () -> Unit, onToggleSidebar: (() -> Unit)?, openProfile: () -> Unit) {
     Column(modifier.fillMaxSize().background(Cream)) {
         Row(Modifier.fillMaxWidth().background(Paper).padding(horizontal = 22.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (onToggleSidebar != null) { IconButton(onClick = onToggleSidebar) { Icon(Icons.Outlined.Menu, "Buka atau tutup sidebar") }; Spacer(Modifier.width(8.dp)) }
             Column { Eyebrow("KOPI ADMIN"); Text(destination.label, style = MaterialTheme.typography.headlineMedium) }
-            Spacer(Modifier.weight(1f)); IconButton(onClick = reload) { Icon(Icons.Outlined.Refresh, "Muat ulang") }; Box(Modifier.size(36.dp).background(Coffee, CircleShape), contentAlignment = Alignment.Center) { Text(account.name.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold) }
+            Spacer(Modifier.weight(1f)); IconButton(onClick = reload) { Icon(Icons.Outlined.Refresh, "Muat ulang") }; Box(Modifier.size(36.dp).background(Coffee, CircleShape).clickable(onClick = openProfile), contentAlignment = Alignment.Center) { Text(account.name.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold) }
         }
         Divider(color = Line)
         if (error.isNotBlank()) Row(Modifier.fillMaxWidth().background(Color(0xFFF8E7E1)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Text(error, color = Coffee, modifier = Modifier.weight(1f)); TextButton(onClick = clearError) { Text("Tutup") } }
@@ -402,8 +409,52 @@ private fun RecipeScreen(recipes: List<RecipeSummary>) {
 
 @Composable private fun RecipeRow(recipe: RecipeSummary) { Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Paper), border = androidx.compose.foundation.BorderStroke(1.dp, Line)) { Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(42.dp).background(Color(0xFFF4EEE8), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Coffee, null, tint = Coffee) }; Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(recipe.name, fontWeight = FontWeight.Bold); Text("${recipe.category} · HPP ${rupiah(recipe.hpp)}", color = Muted, style = MaterialTheme.typography.bodyMedium) }; Column(horizontalAlignment = Alignment.End) { Text(rupiah(recipe.price), fontWeight = FontWeight.Bold); Text(String.format(Locale("id", "ID"), "%.1f%%", recipe.margin), color = if (recipe.margin >= 50) Success else Caramel, style = MaterialTheme.typography.bodyMedium) } } } }
 
-@Composable private fun ProfileScreen(workspace: WorkspaceData, account: Account) { val profile = workspace.profile; Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp)) { Text("Profil Kedai", style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(16.dp)); Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Paper), border = androidx.compose.foundation.BorderStroke(1.dp, Line)) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { ProfileItem("Nama kedai", profile?.name.orEmpty()); ProfileItem("Tipe usaha", profile?.businessType.orEmpty()); ProfileItem("Lokasi", listOfNotNull(profile?.city, profile?.province).filter { it.isNotBlank() }.joinToString(", ")); Divider(); ProfileItem("Pemilik", account.name); ProfileItem("WhatsApp", account.whatsapp.ifBlank { "-" }); ProfileItem("Paket", workspace.subscription?.plan ?: "Starter") } } } }
-@Composable private fun ProfileItem(label: String, value: String) { Column { Text(label.uppercase(), style = MaterialTheme.typography.labelMedium, color = Muted); Text(value.ifBlank { "-" }, fontWeight = FontWeight.Bold) } }
+@Composable
+private fun ProfileScreen(workspace: WorkspaceData, account: Account) {
+    val profile = workspace.profile
+    val subscription = workspace.subscription
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val compact = maxWidth < 700.dp
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(if (compact) 14.dp else 22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            item { Column { Text("Profil Kedai", style = MaterialTheme.typography.headlineMedium); Text("Identitas usaha, pemilik akun, dan status ruang kerja.", color = Muted) } }
+            item {
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Forest), shape = RoundedCornerShape(16.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(if (compact) 18.dp else 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(if (compact) 58.dp else 72.dp).background(Coffee, CircleShape).border(2.dp, Color.White.copy(alpha = .3f), CircleShape), contentAlignment = Alignment.Center) { Text(profile?.name.orEmpty().take(1).ifBlank { "K" }.uppercase(), color = Color.White, style = MaterialTheme.typography.headlineMedium) }
+                        Spacer(Modifier.width(16.dp)); Column(Modifier.weight(1f)) { Text(profile?.name.orEmpty().ifBlank { "Nama kedai belum diisi" }, color = Color.White, style = MaterialTheme.typography.headlineMedium, maxLines = 2); Text(account.name.ifBlank { "Pemilik kedai" }, color = Color(0xFFD6E0DE)); Spacer(Modifier.height(9.dp)); Surface(color = Color.White.copy(alpha = .12f), shape = RoundedCornerShape(18.dp)) { Text("${subscription?.plan ?: "Starter"} · ${subscription?.status?.replaceFirstChar { it.uppercase() } ?: "Aktif"}", Modifier.padding(horizontal = 11.dp, vertical = 6.dp), color = Color(0xFFE6A763), style = MaterialTheme.typography.labelLarge) } }
+                        if (!compact) Box(Modifier.background(Color.White.copy(alpha = .1f), RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp)) { Column(horizontalAlignment = Alignment.End) { Text("RUANG KERJA", color = Color(0xFFC9D6D3), style = MaterialTheme.typography.labelMedium); Text("Tersinkron", color = Color.White, fontWeight = FontWeight.Bold) } }
+                    }
+                }
+            }
+            item {
+                if (compact) Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    ProfileSection("Informasi Kedai", Icons.Outlined.Storefront, Modifier.fillMaxWidth()) { StoreProfileDetails(profile) }
+                    ProfileSection("Pemilik Akun", Icons.Outlined.Person, Modifier.fillMaxWidth()) { OwnerProfileDetails(account) }
+                } else Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    ProfileSection("Informasi Kedai", Icons.Outlined.Storefront, Modifier.weight(1f)) { StoreProfileDetails(profile) }
+                    ProfileSection("Pemilik Akun", Icons.Outlined.Person, Modifier.weight(1f)) { OwnerProfileDetails(account) }
+                }
+            }
+            item {
+                if (compact) Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    ProfileSection("Ringkasan Usaha", Icons.Outlined.Calculate, Modifier.fillMaxWidth()) { BusinessProfileDetails(workspace) }
+                    ProfileSection("Langganan", Icons.Outlined.WorkspacePremium, Modifier.fillMaxWidth()) { SubscriptionProfileDetails(workspace) }
+                } else Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    ProfileSection("Ringkasan Usaha", Icons.Outlined.Calculate, Modifier.weight(1f)) { BusinessProfileDetails(workspace) }
+                    ProfileSection("Langganan", Icons.Outlined.WorkspacePremium, Modifier.weight(1f)) { SubscriptionProfileDetails(workspace) }
+                }
+            }
+            item { Spacer(Modifier.height(80.dp)) }
+        }
+    }
+}
+
+@Composable private fun ProfileSection(title: String, icon: ImageVector, modifier: Modifier, content: @Composable () -> Unit) { Card(modifier, colors = CardDefaults.cardColors(containerColor = Paper), border = androidx.compose.foundation.BorderStroke(1.dp, Line), shape = RoundedCornerShape(14.dp)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(38.dp).background(Color(0xFFF4EEE8), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = Coffee, modifier = Modifier.size(20.dp)) }; Spacer(Modifier.width(10.dp)); Text(title, style = MaterialTheme.typography.titleLarge) }; Divider(color = Line); content() } } }
+@Composable private fun StoreProfileDetails(profile: id.kopikontrol.app.data.StoreProfile?) { ProfileDetail(Icons.Outlined.Storefront, "Nama kedai", profile?.name.orEmpty()); ProfileDetail(Icons.Outlined.Coffee, "Tipe usaha", profile?.businessType.orEmpty()); ProfileDetail(Icons.Outlined.LocationOn, "Lokasi", listOfNotNull(profile?.city, profile?.province).filter { it.isNotBlank() }.joinToString(", ")) }
+@Composable private fun OwnerProfileDetails(account: Account) { ProfileDetail(Icons.Outlined.Person, "Nama pemilik", account.name); ProfileDetail(Icons.Outlined.Email, "Email", account.email); ProfileDetail(Icons.Outlined.Phone, "WhatsApp", account.whatsapp) }
+@Composable private fun BusinessProfileDetails(workspace: WorkspaceData) { ProfileDetail(Icons.Outlined.Calculate, "Target margin", "${workspace.profile?.targetMargin ?: 60}%"); ProfileDetail(Icons.Outlined.RestaurantMenu, "Produk menu", "${workspace.recipes.size} produk"); ProfileDetail(Icons.Outlined.Inventory2, "Bahan tersimpan", "${workspace.ingredients.size} bahan") }
+@Composable private fun SubscriptionProfileDetails(workspace: WorkspaceData) { val subscription = workspace.subscription; ProfileDetail(Icons.Outlined.WorkspacePremium, "Paket", subscription?.plan ?: "Starter"); ProfileDetail(Icons.Outlined.ReceiptLong, "Status", subscription?.status?.replaceFirstChar { it.uppercase() } ?: "Aktif"); ProfileDetail(Icons.Outlined.Refresh, "Masa aktif", when { subscription?.isLifetime == true -> "Selamanya"; subscription?.daysLeft != null -> "${subscription.daysLeft} hari tersisa"; else -> "-" }) }
+@Composable private fun ProfileDetail(icon: ImageVector, label: String, value: String) { Row(verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, tint = Caramel, modifier = Modifier.size(19.dp)); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { Text(label.uppercase(), style = MaterialTheme.typography.labelMedium, color = Muted); Text(value.ifBlank { "-" }, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis) } } }
 
 @Composable private fun MigrationScreen(title: String, badge: String, message: String, icon: ImageVector) { Column(Modifier.fillMaxSize().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { Box(Modifier.size(72.dp).background(Color(0xFFF4EEE8), RoundedCornerShape(20.dp)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = Coffee, modifier = Modifier.size(34.dp)) }; Spacer(Modifier.height(18.dp)); Text(title, style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(8.dp)); Surface(color = Color(0xFFE3ECE8), shape = RoundedCornerShape(20.dp)) { Text(badge, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Success, style = MaterialTheme.typography.labelLarge) }; Spacer(Modifier.height(12.dp)); Text(message, color = Muted, modifier = Modifier.fillMaxWidth(.75f), style = MaterialTheme.typography.bodyLarge) } }
 
