@@ -5,7 +5,7 @@ Versi ini tidak memakai WebView untuk menampilkan halaman utama.
 
 ## Status migrasi
 
-Versi `2.0.0-alpha01` mencakup:
+Versi `2.0.0-alpha02` mencakup:
 
 - Login dan pendaftaran WhatsApp native.
 - Login Google melalui browser sistem dan kembali ke aplikasi.
@@ -14,16 +14,22 @@ Versi `2.0.0-alpha01` mencakup:
 - Navigasi adaptif untuk handphone dan tablet.
 - Ringkasan, daftar bahan, daftar resep, dan profil dari API KopiKontrol.
 - Design system native dengan warna, tipografi, card, dan navigasi KopiKontrol.
+- POS adaptif: katalog, filter kategori, badge jumlah, pesanan, dan pembayaran terpisah.
+- Validasi metode pembayaran dan uang diterima, nominal cepat khusus tunai, diskon, pajak, serta service charge.
+- Riwayat transaksi lokal dan popup transaksi berhasil.
+- Input SKU melalui scanner Bluetooth/USB atau input manual.
+- Pengaturan printer thermal Bluetooth, ukuran kertas 58/72/80 mm, dan tes cetak ESC/POS.
+- Pengaturan nota serta pajak dan service charge yang hanya aktif setelah ada perubahan.
+- Pemeriksaan ketersediaan produk berdasarkan stok komponen resep.
 
-Modul Transaksi POS, CRUD bahan/resep, scan barcode, printer, nota, pajak,
-service charge, dan penyimpanan offline akan dimigrasikan bertahap setelah
-fondasi ini stabil.
+Kamera barcode, printer sistem/dot matrix native, sinkronisasi transaksi ke server,
+serta CRUD master data akan dilanjutkan pada tahap migrasi berikutnya.
 
 ## Build APK
 
 Setiap push ke branch `main` menjalankan workflow **Build APK**. Unduh artifact
-`KopiKontrol-APK` dari halaman Actions. File di dalam artifact bernama
-`KopiKontrol-Native-v2.0.0-alpha01.apk`.
+`KopiKontrol-Native-v2.0.0-alpha02` dari halaman Actions. File di dalam artifact
+bernama `KopiKontrol-Native-v2.0.0-alpha02.apk`.
 
 ## Konfigurasi
 

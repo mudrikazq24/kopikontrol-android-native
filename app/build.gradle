@@ -12,18 +12,9 @@ android {
         applicationId "id.kopikontrol.nativealpha"
         minSdk 24
         targetSdk 35
-        versionCode 6
-        versionName "2.0.0-alpha01"
+        versionCode 7
+        versionName "2.0.0-alpha02"
         buildConfigField "String", "API_BASE_URL", '"https://kopikontrol-starter.mudrikarzaqi47.chatgpt.site"'
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 
     buildTypes {
@@ -36,6 +27,15 @@ android {
     buildFeatures {
         compose true
         buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
     }
 
     packaging {

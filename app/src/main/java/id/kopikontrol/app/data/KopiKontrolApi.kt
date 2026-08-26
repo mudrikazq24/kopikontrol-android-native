@@ -142,13 +142,32 @@ class KopiKontrolApi(private val sessionStore: SessionStore) {
                 )
             },
             ingredients = (0 until ingredientJson.length()).map { index -> ingredientJson.getJSONObject(index) }.map {
-                IngredientSummary(it.optString("name"), it.optString("category", "Lainnya"), it.optString("unit"), it.optDouble("price"), it.optString("stock", "-"))
+                IngredientSummary(it.optString("id"), it.optString("name"), it.optString("category", "Lainnya"), it.optString("unit"), it.optDouble("price"), it.optString("stock", "-"))
             },
             recipes = (0 until recipeJson.length()).map { index -> recipeJson.getJSONObject(index) }.map {
-                RecipeSummary(it.optString("name"), it.optString("category", "Minuman"), it.optDouble("hpp"), it.optDouble("price"), it.optDouble("margin"), it.optString("status", "-"))
+                RecipeSummary(
+                    id = it.optString("id"), name = it.optString("name"), category = it.optString("category", "Minuman"),
+                    hpp = it.optDouble("hpp"), price = it.optDouble("price"), margin = it.optDouble("margin"), status = it.optString("status", "-"),
+                    sku = it.optString("sku"), photo = it.optString("photo"), components = it.optJSONArray("components").toComponents(),
+                )
             },
-            subrecipeCount = subrecipeJson.length(),
+            subrecipes = (0 until subrecipeJson.length()).map { index -> subrecipeJson.getJSONObject(index) }.map {
+                SubrecipeSummary(
+                    id = it.optString("id"), name = it.optString("name"), output = it.optDouble("output"), unit = it.optString("unit"),
+                    components = it.optJSONArray("components").toComponents(),
+                )
+            },
         )
+    }
+
+    private fun JSONArray?.toComponents(): List<RecipeComponent> {
+        if (this == null) return emptyList()
+        return (0 until length()).map { index -> getJSONObject(index) }.map {
+            RecipeComponent(
+                sourceId = it.optString("sourceId"), kind = it.optString("kind", "ingredient"), name = it.optString("name"),
+                quantity = it.optDouble("quantity"), unit = it.optString("unit"),
+            )
+        }
     }
 
     private fun normalizeWhatsApp(value: String): String {

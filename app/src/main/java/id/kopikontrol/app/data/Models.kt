@@ -23,6 +23,7 @@ data class Subscription(
 )
 
 data class IngredientSummary(
+    val id: String,
     val name: String,
     val category: String,
     val unit: String,
@@ -30,13 +31,33 @@ data class IngredientSummary(
     val stock: String,
 )
 
+data class RecipeComponent(
+    val sourceId: String,
+    val kind: String,
+    val name: String,
+    val quantity: Double,
+    val unit: String,
+)
+
+data class SubrecipeSummary(
+    val id: String,
+    val name: String,
+    val output: Double,
+    val unit: String,
+    val components: List<RecipeComponent>,
+)
+
 data class RecipeSummary(
+    val id: String,
     val name: String,
     val category: String,
     val hpp: Double,
     val price: Double,
     val margin: Double,
     val status: String,
+    val sku: String = "",
+    val photo: String = "",
+    val components: List<RecipeComponent> = emptyList(),
 )
 
 data class WorkspaceData(
@@ -44,8 +65,10 @@ data class WorkspaceData(
     val subscription: Subscription?,
     val ingredients: List<IngredientSummary>,
     val recipes: List<RecipeSummary>,
-    val subrecipeCount: Int,
+    val subrecipes: List<SubrecipeSummary>,
 )
+
+val WorkspaceData.subrecipeCount: Int get() = subrecipes.size
 
 data class OnboardingDraft(
     val storeName: String,
