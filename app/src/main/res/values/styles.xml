@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.KopiKontrol" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">@color/kopi_cream</item>
+        <item name="android:navigationBarColor">#263F41</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>
