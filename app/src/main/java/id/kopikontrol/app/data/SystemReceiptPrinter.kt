@@ -54,20 +54,43 @@ private class ReceiptAdapter(
         val printAttributes = attributes ?: run { callback.onWriteFailed("Pengaturan kertas tidak tersedia."); return }
         if (cancellationSignal.isCanceled) { callback.onWriteCancelled(); return }
         runCatching {
-            PrintedPdfDocument(context, printAttributes).use { document ->
-                val page = document.startPage(0)
-                val canvas = page.canvas
-                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.BLACK; textSize = 10f; typeface = Typeface.MONOSPACE }
-                val left = page.info.contentRect.left + 12f
-                var y = page.info.contentRect.top + 20f
-                receipt.lineSequence().forEach { line ->
-                    canvas.drawText(line.take(columns.coerceIn(24, 48)), left, y, paint)
-                    y += 13f
-                }
-                document.finishPage(page)
-                FileOutputStream(destination.fileDescriptor).use(document::writeTo)
-            }
-        }.onSuccess { callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES)) }
-            .onFailure { callback.onWriteFailed(it.message ?: "Nota gagal dibuat.") }
+    val document = PrintedPdfDocument(context, printAttributes)
+
+    try {
+        val page = document.startPage(0)
+        val canvas = page.canvas
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.BLACK
+            textSize = 10f
+            typeface = Typeface.MONOSPACE
+        }
+
+        val left = page.info.contentRect.left + 12f
+        var y = page.info.contentRect.top + 20f
+
+        receipt.lineSequence().forEach { line ->
+            canvas.drawText(
+                line.take(columns.coerceIn(24, 48)),
+                left,
+                y,
+                paint
+            )
+            y += 13f
+        }
+
+        document.finishPage(page)
+
+        FileOutputStream(destination.fileDescriptor).use { output ->
+            document.writeTo(output)
+        }
+    } finally {
+        document.close()
     }
+}.onSuccess {
+    callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+}.onFailure { error ->
+    callback.onWriteFailed(
+        error.message ?: "Nota gagal dibuat."
+    )
 }
