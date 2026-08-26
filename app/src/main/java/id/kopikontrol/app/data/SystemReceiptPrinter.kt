@@ -94,3 +94,5 @@ private class ReceiptAdapter(
         error.message ?: "Nota gagal dibuat."
     )
 }
+    }
+}
