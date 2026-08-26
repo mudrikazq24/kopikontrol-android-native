@@ -66,4 +66,16 @@ class PosStore(context: Context) {
         }
         preferences.edit().putString("transactions", array.toString()).apply()
     }
+
+    fun productSkus(): Map<String, String> {
+        val json = runCatching { JSONObject(preferences.getString("product_skus", "{}").orEmpty()) }.getOrDefault(JSONObject())
+        return json.keys().asSequence().associateWith { json.optString(it) }.filterValues { it.isNotBlank() }
+    }
+
+    fun saveProductSku(recipeId: String, sku: String) {
+        val values = productSkus().toMutableMap()
+        if (sku.isBlank()) values.remove(recipeId) else values[recipeId] = sku.trim()
+        val json = JSONObject(); values.forEach { (id, value) -> json.put(id, value) }
+        preferences.edit().putString("product_skus", json.toString()).apply()
+    }
 }

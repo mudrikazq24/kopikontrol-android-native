@@ -29,6 +29,7 @@ class BluetoothPrinterManager(private val context: Context) {
     @SuppressLint("MissingPermission")
     suspend fun print(address: String, text: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
+            require(!requiresPermission()) { "Izinkan akses Perangkat di sekitar, lalu coba cetak kembali." }
             require(address.isNotBlank()) { "Pilih printer Bluetooth terlebih dahulu." }
             val device = adapter?.getRemoteDevice(address) ?: error("Bluetooth tidak tersedia.")
             val socket = device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))

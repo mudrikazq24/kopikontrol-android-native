@@ -58,6 +58,7 @@ import id.kopikontrol.app.data.PosStore
 import id.kopikontrol.app.data.PrinterSettings
 import id.kopikontrol.app.data.ReceiptSettings
 import id.kopikontrol.app.data.StoreProfile
+import id.kopikontrol.app.data.SystemReceiptPrinter
 import id.kopikontrol.app.ui.theme.Coffee
 import id.kopikontrol.app.ui.theme.Line
 import id.kopikontrol.app.ui.theme.Muted
@@ -89,8 +90,18 @@ fun SettingsScreen(profile: StoreProfile?) {
 @Composable private fun SettingsTabCard(tab: SettingsTab, selected: Boolean, modifier: Modifier, select: () -> Unit) { Card(modifier.clickable(onClick = select), colors = CardDefaults.cardColors(containerColor = Paper), border = BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Coffee else Line)) { Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.background(if (selected) Coffee else Color(0xFFF4EEE8), RoundedCornerShape(9.dp)).padding(10.dp)) { Icon(tab.icon, null, tint = if (selected) Color.White else Coffee) }; Spacer(Modifier.width(10.dp)); Text(tab.label, fontWeight = FontWeight.Bold) } } }
 
 @Composable private fun PrinterSettingsCard(store: PosStore, manager: BluetoothPrinterManager) {
-    val context = LocalContext.current; val scope = rememberCoroutineScope(); var saved by remember { mutableStateOf(store.printerSettings()) }; var draft by remember { mutableStateOf(saved) }; var devicesOpen by remember { mutableStateOf(false) }; var refresh by remember { mutableStateOf(0) }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (!granted) Toast.makeText(context, "Izin perangkat sekitar diperlukan untuk printer.", Toast.LENGTH_LONG).show() else refresh++ }
+    val context = LocalContext.current; val scope = rememberCoroutineScope(); var saved by remember { mutableStateOf(store.printerSettings()) }; var draft by remember { mutableStateOf(saved) }; var devicesOpen by remember { mutableStateOf(false) }; var refresh by remember { mutableStateOf(0) }; var testAfterPermission by remember { mutableStateOf(false) }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) Toast.makeText(context, "Izin Perangkat di sekitar diperlukan untuk printer.", Toast.LENGTH_LONG).show()
+        else {
+            refresh++
+            if (testAfterPermission) scope.launch {
+                val result = manager.print(draft.deviceAddress, "KOPIKONTROL\nTes cetak berhasil\n")
+                Toast.makeText(context, result.exceptionOrNull()?.message ?: "Tes cetak dikirim.", Toast.LENGTH_LONG).show()
+            }
+        }
+        testAfterPermission = false
+    }
     val devices = remember(refresh) { manager.pairedDevices() }
     SettingCard("Pengaturan Printer", "Hubungkan printer thermal Bluetooth atau gunakan printer sistem.") {
         SettingChoice("Jenis printer", draft.type, listOf("bluetooth" to "Thermal Bluetooth", "system" to "Dot matrix / Printer sistem")) { draft = draft.copy(type = it) }
@@ -98,7 +109,11 @@ fun SettingsScreen(profile: StoreProfile?) {
             Text("Printer terhubung", style = MaterialTheme.typography.labelLarge); Spacer(Modifier.height(7.dp)); Box { OutlinedButton(onClick = { if (manager.requiresPermission()) permission.launch(Manifest.permission.BLUETOOTH_CONNECT) else devicesOpen = true }, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(draft.deviceName.ifBlank { "Pilih perangkat yang sudah dipasangkan" }, modifier = Modifier.weight(1f)); Text("⌄") }; DropdownMenu(devicesOpen, { devicesOpen = false }) { if (devices.isEmpty()) DropdownMenuItem({ Text("Tidak ada perangkat terpasang") }, enabled = false, onClick = {}) else devices.forEach { device -> DropdownMenuItem({ Text(device.name) }, onClick = { draft = draft.copy(deviceName = device.name, deviceAddress = device.address); devicesOpen = false }) } } }
             Spacer(Modifier.height(14.dp)); SettingChoice("Ukuran kertas", draft.paperWidth.toString(), listOf("58" to "58 mm", "72" to "72 mm", "80" to "80 mm")) { draft = draft.copy(paperWidth = it.toInt()) }
         } else SettingChoice("Ukuran kertas", draft.paperWidth.toString(), listOf("72" to "Continuous form 72 mm", "33" to "Continuous form 33 kolom")) { draft = draft.copy(paperWidth = it.toInt()) }
-        Spacer(Modifier.height(16.dp)); Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { OutlinedButton(onClick = { scope.launch { val result = manager.print(draft.deviceAddress, "KOPIKONTROL\nTes cetak berhasil\n"); Toast.makeText(context, result.exceptionOrNull()?.message ?: "Tes cetak dikirim.", Toast.LENGTH_LONG).show() } }, enabled = draft.type == "bluetooth" && draft.deviceAddress.isNotBlank()) { Text("Tes Cetak") }; Button(onClick = { store.savePrinterSettings(draft); saved = draft; Toast.makeText(context, "Pengaturan printer disimpan.", Toast.LENGTH_SHORT).show() }, enabled = draft != saved) { Text("Simpan Pengaturan") } }
+        Spacer(Modifier.height(16.dp)); Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { OutlinedButton(onClick = {
+            if (draft.type == "system") SystemReceiptPrinter(context).print("TES-CETAK", "KOPIKONTROL\nTes cetak printer sistem\n\n", if (draft.paperWidth == 33) 33 else 42)
+            else if (manager.requiresPermission()) { testAfterPermission = true; permission.launch(Manifest.permission.BLUETOOTH_CONNECT) }
+            else scope.launch { val result = manager.print(draft.deviceAddress, "KOPIKONTROL\nTes cetak berhasil\n"); Toast.makeText(context, result.exceptionOrNull()?.message ?: "Tes cetak dikirim.", Toast.LENGTH_LONG).show() }
+        }, enabled = draft.type == "system" || draft.deviceAddress.isNotBlank()) { Text("Tes Cetak") }; Button(onClick = { store.savePrinterSettings(draft); saved = draft; Toast.makeText(context, "Pengaturan printer disimpan.", Toast.LENGTH_SHORT).show() }, enabled = draft != saved) { Text("Simpan Pengaturan") } }
     }
 }
 

@@ -75,6 +75,7 @@ import id.kopikontrol.app.data.PosTransaction
 import id.kopikontrol.app.data.PosTransactionItem
 import id.kopikontrol.app.data.RecipeComponent
 import id.kopikontrol.app.data.RecipeSummary
+import id.kopikontrol.app.data.SystemReceiptPrinter
 import id.kopikontrol.app.data.WorkspaceData
 import id.kopikontrol.app.ui.theme.Caramel
 import id.kopikontrol.app.ui.theme.Coffee
@@ -98,9 +99,18 @@ fun PosScreen(workspace: WorkspaceData) {
     val context = LocalContext.current
     val store = remember { PosStore(context) }
     val printerManager = remember { BluetoothPrinterManager(context) }
+    val systemPrinter = remember { SystemReceiptPrinter(context) }
     val scope = rememberCoroutineScope()
+    var pendingBluetoothPrint by remember { mutableStateOf<PosTransaction?>(null) }
     val printerPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) Toast.makeText(context, "Izin perangkat sekitar diperlukan untuk mencetak.", Toast.LENGTH_LONG).show()
+        val transaction = pendingBluetoothPrint
+        if (!granted) Toast.makeText(context, "Izin Perangkat di sekitar diperlukan untuk mencetak.", Toast.LENGTH_LONG).show()
+        else if (transaction != null) scope.launch {
+            val printer = store.printerSettings()
+            val result = printerManager.print(printer.deviceAddress, receiptText(transaction, workspace, store))
+            Toast.makeText(context, result.exceptionOrNull()?.message ?: "Struk dikirim ke printer.", Toast.LENGTH_LONG).show()
+        }
+        pendingBluetoothPrint = null
     }
     val cart = remember { mutableStateMapOf<String, Int>() }
     var page by remember { mutableStateOf(PosPage.Catalog) }
@@ -110,22 +120,34 @@ fun PosScreen(workspace: WorkspaceData) {
     var payment by remember { mutableStateOf("") }
     var receivedText by remember { mutableStateOf("") }
     var completed by remember { mutableStateOf<PosTransaction?>(null) }
+    var localSkus by remember { mutableStateOf(store.productSkus()) }
+    val products = workspace.recipes.map { recipe -> recipe.copy(sku = recipe.sku.ifBlank { localSkus[recipe.id].orEmpty() }) }
     val settings = remember { store.chargeSettings() }
     val available = remember(workspace) { workspace.recipes.associate { it.id to canMake(it, workspace) } }
-    val categories = listOf("Semua") + workspace.recipes.map { it.category }.distinct()
-    val selectedRecipes = workspace.recipes.filter { (cart[it.id] ?: 0) > 0 }
+    val categories = listOf("Semua") + products.map { it.category }.distinct()
+    val selectedRecipes = products.filter { (cart[it.id] ?: 0) > 0 }
     val totalItems = cart.values.sum()
     val discount = discountText.digitsValue()
     val totals = calculateTotals(selectedRecipes, cart, discount, settings)
+    fun printTransaction(transaction: PosTransaction) {
+        val printer = store.printerSettings(); val receipt = receiptText(transaction, workspace, store)
+        if (printer.type == "system") systemPrinter.print(transaction.id, receipt, if (printer.paperWidth == 33) 33 else 42)
+        else if (printer.deviceAddress.isBlank()) Toast.makeText(context, "Pilih printer Bluetooth di menu Pengaturan.", Toast.LENGTH_LONG).show()
+        else if (printerManager.requiresPermission()) { pendingBluetoothPrint = transaction; printerPermission.launch(Manifest.permission.BLUETOOTH_CONNECT) }
+        else scope.launch {
+            val result = printerManager.print(printer.deviceAddress, receipt)
+            Toast.makeText(context, result.exceptionOrNull()?.message ?: "Struk dikirim ke printer.", Toast.LENGTH_LONG).show()
+        }
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 700.dp
         when {
-            page == PosPage.Scanner -> ScannerPage(workspace.recipes, { page = PosPage.Catalog }) { recipe ->
+            page == PosPage.Scanner -> ScannerPage(products, { page = PosPage.Catalog }, { recipe ->
                 if (available[recipe.id] == true) cart[recipe.id] = (cart[recipe.id] ?: 0) + 1
                 page = PosPage.Catalog
-            }
-            page == PosPage.History -> HistoryPage(store.transactions()) { page = PosPage.Catalog }
+            }, { recipe, sku -> store.saveProductSku(recipe.id, sku); localSkus = store.productSkus() })
+            page == PosPage.History -> HistoryPage(store.transactions(), { page = PosPage.Catalog }, ::printTransaction)
             page == PosPage.Payment -> PaymentPage(
                 totals, payment, { payment = it }, receivedText, { receivedText = formatDigits(it) },
                 cash = payment == "Tunai", back = { page = if (compact) PosPage.Order else PosPage.Catalog },
@@ -146,9 +168,9 @@ fun PosScreen(workspace: WorkspaceData) {
                 back = { page = PosPage.Catalog }, pay = { page = PosPage.Payment }, compact = true,
             )
             else -> {
-                if (compact) CatalogPanel(workspace.recipes, available, cart, query, { query = it }, category, { category = it }, categories, { page = PosPage.Scanner }, { page = PosPage.History })
+                if (compact) CatalogPanel(products, available, cart, query, { query = it }, category, { category = it }, categories, { page = PosPage.Scanner }, { page = PosPage.History })
                 else Row(Modifier.fillMaxSize()) {
-                    CatalogPanel(workspace.recipes, available, cart, query, { query = it }, category, { category = it }, categories, { page = PosPage.Scanner }, { page = PosPage.History }, Modifier.weight(1f))
+                    CatalogPanel(products, available, cart, query, { query = it }, category, { category = it }, categories, { page = PosPage.Scanner }, { page = PosPage.History }, Modifier.weight(1f))
                     OrderPanel(selectedRecipes, cart, discountText, { discountText = formatDigits(it) }, totals, back = null, pay = { page = PosPage.Payment }, compact = false, modifier = Modifier.width(360.dp))
                 }
                 if (compact && totalItems > 0) FloatingActionButton(
@@ -164,15 +186,7 @@ fun PosScreen(workspace: WorkspaceData) {
             onDismissRequest = {}, icon = { Box(Modifier.size(52.dp).background(Color(0xFFE3ECE8), CircleShape), contentAlignment = Alignment.Center) { Text("✓", color = Success, style = MaterialTheme.typography.headlineMedium) } },
             title = { Text("Transaksi berhasil") }, text = { Text("${transaction.id} · ${rupiahPos(transaction.total)}") },
             confirmButton = { Button(onClick = { completed = null; cart.clear(); discountText = ""; payment = ""; receivedText = ""; page = PosPage.Catalog }) { Text("Transaksi Baru") } },
-            dismissButton = { OutlinedButton(onClick = {
-                val printer = store.printerSettings()
-                if (printer.type != "bluetooth" || printer.deviceAddress.isBlank()) Toast.makeText(context, "Pilih printer Bluetooth di menu Pengaturan.", Toast.LENGTH_LONG).show()
-                else if (printerManager.requiresPermission()) printerPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                else scope.launch {
-                    val result = printerManager.print(printer.deviceAddress, receiptText(transaction, workspace, store))
-                    Toast.makeText(context, result.exceptionOrNull()?.message ?: "Struk dikirim ke printer.", Toast.LENGTH_LONG).show()
-                }
-            }) { Text("Cetak Struk") } },
+            dismissButton = { OutlinedButton(onClick = { printTransaction(transaction) }) { Text("Cetak Struk") } },
         )
     }
 }
@@ -249,10 +263,20 @@ private fun PaymentPage(totals: PosTotals, payment: String, onPayment: (String) 
 
 @Composable private fun SelectPayment(value: String, onChange: (String) -> Unit) { var open by remember { mutableStateOf(false) }; Column { Text("Metode pembayaran *", style = MaterialTheme.typography.labelLarge); Spacer(Modifier.height(7.dp)); Box { OutlinedButton({ open = true }, Modifier.fillMaxWidth().height(52.dp)) { Text(value.ifBlank { "Pilih metode pembayaran" }, color = if (value.isBlank()) Muted else Coffee, modifier = Modifier.weight(1f)); Text("⌄") }; DropdownMenu(open, { open = false }) { listOf("Tunai", "QRIS", "Kartu debit", "Transfer bank").forEach { method -> DropdownMenuItem({ Text(method) }, onClick = { onChange(method); open = false }) } } } } }
 
-@Composable private fun ScannerPage(recipes: List<RecipeSummary>, back: () -> Unit, select: (RecipeSummary) -> Unit) { var sku by remember { mutableStateOf("") }; val found = recipes.firstOrNull { it.sku.isNotBlank() && it.sku.equals(sku.trim(), true) }; Column(Modifier.fillMaxSize().padding(18.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { IconButton(back) { Icon(Icons.Outlined.ArrowBack, "Kembali") }; Text("Scan Barcode", style = MaterialTheme.typography.headlineMedium) }; Spacer(Modifier.height(18.dp)); Box(Modifier.fillMaxWidth().height(220.dp).background(Color.Black, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.QrCodeScanner, null, tint = Color.White, modifier = Modifier.size(72.dp)) }; Spacer(Modifier.height(16.dp)); Text("Masukkan SKU dari scanner Bluetooth/USB atau secara manual.", color = Muted); Spacer(Modifier.height(10.dp)); OutlinedTextField(sku, { sku = it }, Modifier.fillMaxWidth(), label = { Text("SKU produk") }, placeholder = { Text("Scan atau ketik SKU") }, singleLine = true); Spacer(Modifier.height(12.dp)); Button(onClick = { found?.let(select) }, enabled = found != null, modifier = Modifier.fillMaxWidth()) { Text(if (found == null) "Cari produk" else "Tambahkan ${found.name}") } }
+@Composable private fun ScannerPage(recipes: List<RecipeSummary>, back: () -> Unit, select: (RecipeSummary) -> Unit, linkSku: (RecipeSummary, String) -> Unit) {
+    var sku by remember { mutableStateOf("") }; var feedback by remember { mutableStateOf("") }; var linkOpen by remember { mutableStateOf(false) }
+    val found = recipes.firstOrNull { it.sku.isNotBlank() && it.sku.equals(sku.trim(), true) }
+    Column(Modifier.fillMaxSize().padding(18.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) { IconButton(back) { Icon(Icons.Outlined.ArrowBack, "Kembali") }; Text("Scan Barcode", style = MaterialTheme.typography.headlineMedium) }
+        Spacer(Modifier.height(18.dp)); BarcodeCamera { value -> sku = value; val product = recipes.firstOrNull { it.sku.isNotBlank() && it.sku.equals(value, true) }; if (product != null) select(product) else feedback = "Produk dengan SKU $value tidak ditemukan." }
+        Spacer(Modifier.height(16.dp)); Text("Kamera membaca barcode otomatis. Scanner Bluetooth/USB dan input manual tetap dapat digunakan.", color = Muted)
+        if (feedback.isNotBlank()) Text(feedback, color = Danger, modifier = Modifier.padding(top = 8.dp))
+        if (feedback.isNotBlank() && sku.isNotBlank()) { Spacer(Modifier.height(8.dp)); Box { OutlinedButton(onClick = { linkOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("Tautkan barcode ke produk", modifier = Modifier.weight(1f)); Text("⌄") }; DropdownMenu(linkOpen, { linkOpen = false }) { recipes.forEach { recipe -> DropdownMenuItem({ Text(recipe.name) }, onClick = { linkSku(recipe, sku); linkOpen = false; select(recipe) }) } } } }
+        Spacer(Modifier.height(10.dp)); OutlinedTextField(sku, { sku = it; feedback = "" }, Modifier.fillMaxWidth(), label = { Text("SKU produk") }, placeholder = { Text("Scan atau ketik SKU") }, singleLine = true)
+        Spacer(Modifier.height(12.dp)); Button(onClick = { found?.let(select) }, enabled = found != null, modifier = Modifier.fillMaxWidth()) { Text(if (found == null) "Cari produk" else "Tambahkan ${found.name}") }
+    }
 }
-
-@Composable private fun HistoryPage(transactions: List<PosTransaction>, back: () -> Unit) { Column(Modifier.fillMaxSize().padding(18.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { IconButton(back) { Icon(Icons.Outlined.ArrowBack, "Kembali") }; Text("Riwayat Transaksi", style = MaterialTheme.typography.headlineMedium) }; Spacer(Modifier.height(12.dp)); if (transactions.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Belum ada transaksi tersimpan.", color = Muted) } else LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) { items(transactions, key = { it.id }) { transaction -> Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Paper), border = BorderStroke(1.dp, Line)) { Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(transaction.id, fontWeight = FontWeight.Bold); Text(SimpleDateFormat("dd MMM yyyy, HH:mm", Locale("id", "ID")).format(Date(transaction.createdAt)), color = Muted) }; Text(rupiahPos(transaction.total), fontWeight = FontWeight.Bold) } } } } } }
+@Composable private fun HistoryPage(transactions: List<PosTransaction>, back: () -> Unit, print: (PosTransaction) -> Unit) { Column(Modifier.fillMaxSize().padding(18.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { IconButton(back) { Icon(Icons.Outlined.ArrowBack, "Kembali") }; Text("Riwayat Transaksi", style = MaterialTheme.typography.headlineMedium) }; Spacer(Modifier.height(12.dp)); if (transactions.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Belum ada transaksi tersimpan.", color = Muted) } else LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) { items(transactions, key = { it.id }) { transaction -> Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Paper), border = BorderStroke(1.dp, Line)) { Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(transaction.id, fontWeight = FontWeight.Bold); Text(SimpleDateFormat("dd MMM yyyy, HH:mm", Locale("id", "ID")).format(Date(transaction.createdAt)), color = Muted) }; Column(horizontalAlignment = Alignment.End) { Text(rupiahPos(transaction.total), fontWeight = FontWeight.Bold); TextButton(onClick = { print(transaction) }) { Text("Cetak ulang") } } } } } } } }
 
 private fun calculateTotals(recipes: List<RecipeSummary>, cart: Map<String, Int>, requestedDiscount: Double, settings: ChargeSettings): PosTotals {
     val subtotal = recipes.sumOf { it.price * (cart[it.id] ?: 0) }; val discount = requestedDiscount.coerceIn(0.0, subtotal); val net = max(0.0, subtotal - discount)
