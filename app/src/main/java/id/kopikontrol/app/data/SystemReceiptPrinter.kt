@@ -53,8 +53,8 @@ private class ReceiptAdapter(
     ) {
         val printAttributes = attributes ?: run { callback.onWriteFailed("Pengaturan kertas tidak tersedia."); return }
         if (cancellationSignal.isCanceled) { callback.onWriteCancelled(); return }
-        runCatching {
-            PrintedPdfDocument(context, printAttributes).use { document ->
+        val document = PrintedPdfDocument(context, printAttributes)
+        try {
                 val page = document.startPage(0)
                 val canvas = page.canvas
                 val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.BLACK; textSize = 10f; typeface = Typeface.MONOSPACE }
@@ -65,9 +65,13 @@ private class ReceiptAdapter(
                     y += 13f
                 }
                 document.finishPage(page)
-                FileOutputStream(destination.fileDescriptor).use(document::writeTo)
-            }
-        }.onSuccess { callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES)) }
-            .onFailure { callback.onWriteFailed(it.message ?: "Nota gagal dibuat.") }
+                val output = FileOutputStream(destination.fileDescriptor)
+                try { document.writeTo(output) } finally { output.close() }
+            callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+        } catch (error: Exception) {
+            callback.onWriteFailed(error.message ?: "Nota gagal dibuat.")
+        } finally {
+            document.close()
+        }
     }
 }
